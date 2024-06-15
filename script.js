@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let score = 0;
     const scoreDisplay = document.getElementById('score');
     const startButton = document.getElementById('start-button');
+    const rotateButton = document.getElementById('rotate-button');
+    const leftButton = document.getElementById('left-button');
+    const rightButton = document.getElementById('right-button');
+    const downButton = document.getElementById('down-button');
+    const dropButton = document.getElementById('drop-button');
+    const pauseButton = document.getElementById('pause-button');
     let timerId;
     let isPaused = false;
 
@@ -60,10 +66,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentPosition = 4;
     let currentRotation = 0;
+    let currentShape;
+    let nextShape;
+    let gameStarted = false;
 
     // Randomly select a Tetromino and its first rotation
-    let random = Math.floor(Math.random() * theTetrominoes.length);
-    let current = theTetrominoes[random][currentRotation];
+    function randomTetromino() {
+        currentShape = nextShape || getRandomShape();
+        nextShape = getRandomShape();
+        current = theTetrominoes[currentShape][currentRotation];
+    }
+
+    function getRandomShape() {
+        return Math.floor(Math.random() * theTetrominoes.length);
+    }
 
     // Draw the Tetromino
     function draw() {
@@ -92,9 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (current.some(index => squares[currentPosition + index + width].classList.contains('taken'))) {
             current.forEach(index => squares[currentPosition + index].classList.add('taken'));
             // Start a new Tetromino falling
-            random = Math.floor(Math.random() * theTetrominoes.length);
-            currentRotation = 0;
-            current = theTetrominoes[random][currentRotation];
+            randomTetromino();
             currentPosition = 4;
             draw();
             checkRow();
@@ -104,67 +118,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Move the Tetromino left, unless is at the edge or there is a blockage
     function moveLeft() {
-        if (!isPaused) {
-            undraw();
-            const isAtLeftEdge = current.some(index => (currentPosition + index) % width === 0);
-            if (!isAtLeftEdge) currentPosition -= 1;
-            if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
-                currentPosition += 1;
-            }
-            draw();
+        undraw();
+        const isAtLeftEdge = current.some(index => (currentPosition + index) % width === 0);
+        if (!isAtLeftEdge) currentPosition -= 1;
+        if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
+            currentPosition += 1;
         }
+        draw();
     }
 
     // Move the Tetromino right, unless is at the edge or there is a blockage
     function moveRight() {
-        if (!isPaused) {
-            undraw();
-            const isAtRightEdge = current.some(index => (currentPosition + index) % width === width - 1);
-            if (!isAtRightEdge) currentPosition += 1;
-            if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
-                currentPosition -= 1;
-            }
-            draw();
+        undraw();
+        const isAtRightEdge = current.some(index => (currentPosition + index) % width === width - 1);
+        if (!isAtRightEdge) currentPosition += 1;
+        if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
+            currentPosition -= 1;
         }
+        draw();
     }
 
     // Rotate the Tetromino
     function rotate() {
-        if (!isPaused) {
-            undraw();
-            currentRotation++;
-            if (currentRotation === current.length) {
-                currentRotation = 0;
-            }
-            current = theTetrominoes[random][currentRotation];
-            // Check if the rotation is valid (not causing overlap)
-            if (current.some(index => squares[currentPosition + index].classList.contains('taken')) ||
-                current.some(index => (currentPosition + index) % width === 0) ||
-                current.some(index => (currentPosition + index) % width === width - 1)) {
-                currentRotation--;
-                if (currentRotation < 0) {
-                    currentRotation = current.length - 1;
-                }
-                current = theTetrominoes[random][currentRotation];
-            }
-            draw();
+        undraw();
+        currentRotation++;
+        if (currentRotation === current.length) {
+            currentRotation = 0;
         }
-    }
-
-    // Drop the Tetromino to the bottom
-    function drop() {
-        if (!isPaused) {
-            undraw();
-            while (!current.some(index => squares[currentPosition + index + width].classList.contains('taken'))) {
-                currentPosition += width;
-            }
-            draw();
-            freeze();
+        current = theTetrominoes[currentShape][currentRotation];
+        // Check if the rotation is valid (not causing overlap or out of bounds)
+        const isAtLeftEdge = current.some(index => (currentPosition + index) % width === 0);
+        const isAtRightEdge = current.some(index => (currentPosition + index) % width === width - 1);
+        if (current.some(index => squares[currentPosition + index].classList.contains('taken')) ||
+        current.some(index => (currentPosition + index) % width === 0 && isAtLeftEdge) ||
+        current.some(index => (currentPosition + index) % width === width - 1 && isAtRightEdge)) {
+        currentRotation--;
+        if (currentRotation < 0) {
+            currentRotation = current.length - 1;
         }
+        current = theTetrominoes[currentShape][currentRotation];
     }
+    draw();
+}
 
-    // Assign functions to keyCodes
-    function control(e) {
+// Drop the Tetromino to the bottom
+function drop() {
+    undraw();
+    while (!current.some(index => squares[currentPosition + index + width].classList.contains('taken'))) {
+        currentPosition += width;
+    }
+    draw();
+    freeze();
+}
+
+// Assign functions to touch events for mobile controls
+rotateButton.addEventListener('click', rotate);
+leftButton.addEventListener('click', moveLeft);
+rightButton.addEventListener('click', moveRight);
+downButton.addEventListener('click', moveDown);
+dropButton.addEventListener('click', drop);
+pauseButton.addEventListener('click', pauseGame);
+
+// Assign functions to keyCodes for keyboard controls
+function control(e) {
+    if (!isPaused && gameStarted) {
         if (e.keyCode === 37) {
             moveLeft();
         } else if (e.keyCode === 38) {
@@ -179,57 +196,74 @@ document.addEventListener('DOMContentLoaded', () => {
             pauseGame();
         }
     }
-    document.addEventListener('keydown', control);
+}
+document.addEventListener('keydown', control);
 
-    // Check for completed rows
-    function checkRow() {
-        for (let i = 0; i < 199; i += width) {
-            const row = [i, i + 1, i + 2, i + 3, i + 4, i + 5, i + 6, i + 7, i + 8, i + 9];
-            if (row.every(index => squares[index].classList.contains('taken'))) {
-                score += 10;
-                scoreDisplay.innerHTML = score;
-                row.forEach(index => {
-                    squares[index].classList.remove('taken');
-                    squares[index].classList.remove('tetromino');
-                });
-                const squaresRemoved = squares.splice(i, width);
-                squares = squaresRemoved.concat(squares);
-                squares.forEach(cell => grid.appendChild(cell));
-            }
+// Check for completed rows
+function checkRow() {
+    for (let i = 0; i < 199; i += width) {
+        const row = [i, i + 1, i + 2, i + 3, i + 4, i + 5, i + 6, i + 7, i + 8, i + 9];
+        if (row.every(index => squares[index].classList.contains('taken'))) {
+            score += 10;
+            scoreDisplay.innerHTML = score;
+            row.forEach(index => {
+                squares[index].classList.remove('taken');
+                squares[index].classList.remove('tetromino');
+            });
+            const squaresRemoved = squares.splice(i, width);
+            squares = squaresRemoved.concat(squares);
+            squares.forEach(cell => grid.appendChild(cell));
         }
     }
+}
 
-    // Check for game over
-    function gameOver() {
-        if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
-            scoreDisplay.innerHTML = 'Game Over';
-            clearInterval(timerId);
-        }
+// Check for game over
+function gameOver() {
+    if (current.some(index => squares[currentPosition + index].classList.contains('taken'))) {
+        scoreDisplay.innerHTML = 'Game Over - Clique em Iniciar Jogo para recomeçar';
+        clearInterval(timerId);
+        gameStarted = false;
     }
+}
 
-    // Start/Pause the game
-    function startGame() {
-        if (timerId) {
-            clearInterval(timerId);
-            timerId = null;
-        } else {
-            draw();
-            timerId = setInterval(moveDown, 1000);
-            isPaused = false;
-        }
+// Start/Pause the game
+function startGame() {
+    if (!gameStarted) {
+        // Clear grid
+        squares.forEach(square => {
+            square.classList.remove('tetromino');
+            square.classList.remove('taken');
+        });
+
+        // Reset variables
+        score = 0;
+        scoreDisplay.innerHTML = score;
+        randomTetromino();
+        currentPosition = 4;
+        isPaused = false;
+        gameStarted = true;
+
+        // Start game loop
+        draw();
+        timerId = setInterval(moveDown, 1000);
     }
+}
 
-    // Pause/Resume the game
-    function pauseGame() {
-        if (timerId) {
-            clearInterval(timerId);
-            timerId = null;
-            isPaused = true;
-        } else {
-            timerId = setInterval(moveDown, 1000);
-            isPaused = false;
-        }
+// Pause/Resume the game
+function pauseGame() {
+    if (!gameStarted) return; // Do nothing if game not started
+
+    if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+        isPaused = true;
+    } else {
+        timerId = setInterval(moveDown, 1000);
+        isPaused = false;
     }
+}
 
-    startButton.addEventListener('click', startGame);
+// Initialize the game
+startButton.addEventListener('click', startGame);
 });
+
